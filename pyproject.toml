@@ -1,0 +1,35 @@
+[project]
+name = "gh-backup"
+version = "0.1.0"
+description = "Backup a GitHub organization or user: repos, issues, and pull requests"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["typer>=0.15", "rich>=13", "tenacity>=9", "zstandard>=0.23"]
+
+[project.scripts]
+gh-backup = "gh_backup.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "commitizen>=4.13.7",
+    "pre-commit>=4.5.1",
+    "pytest>=8",
+    "pytest-mock>=3",
+    "ruff>=0.15.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--tb=short -q -ra"
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "$version"
+version_scheme = "pep440"
+version_provider = "uv"
+update_changelog_on_bump = true
+major_version_zero = true

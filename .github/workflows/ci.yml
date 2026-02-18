@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main, master]
+
+# Cancel in-progress runs for the same branch/PR when a new push arrives
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-groups
+
+      - name: Check formatting (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Prune uv cache
+        run: uv cache prune --ci
+
+  commit-check:
+    name: Commit Message Convention
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Full history required for rev-range checking
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-groups
+
+      - name: Check PR commits (conventional commits)
+        if: github.event_name == 'pull_request'
+        run: |
+          uv run cz check \
+            --rev-range ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+
+      - name: Check HEAD commit (conventional commits)
+        if: github.event_name == 'push'
+        run: |
+          # commitizen automatically skips merge commit messages (e.g. "Merge pull request #N")
+          # Guard against first commit on a branch where HEAD~1 does not exist
+          if git rev-parse HEAD~1 > /dev/null 2>&1; then
+            uv run cz check --rev-range HEAD~1..HEAD
+          else
+            echo "First commit on branch — checking HEAD commit message directly"
+            uv run cz check --commit-msg-file <(git log -1 --format=%B HEAD)
+          fi
+
+      - name: Prune uv cache
+        run: uv cache prune --ci
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-groups
+
+      - name: Run tests
+        run: |
+          uv run pytest; code=$?
+          if [ "$code" -eq 5 ]; then
+            echo "::warning::No tests collected (pytest exit 5). Add tests to the tests/ directory."
+            exit 0
+          fi
+          exit "$code"
+
+      - name: Prune uv cache
+        run: uv cache prune --ci
