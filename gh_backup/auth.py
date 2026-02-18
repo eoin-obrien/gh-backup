@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -50,18 +51,13 @@ def check_auth() -> AuthState:
 
     for line in output.splitlines():
         line = line.strip()
-        if "Logged in to" in line:
-            # "Logged in to github.com account eoin-obrien (...)"
-            parts = line.split()
-            try:
-                idx = parts.index("to") + 1
-                hostname = parts[idx]
-                account_idx = parts.index("account") + 1
-                account = parts[account_idx].rstrip("()")
-            except (ValueError, IndexError):
-                pass
-        elif "Token scopes:" in line or "oauth_token" in line.lower():
-            # "Token scopes: 'repo', 'read:org', ..."
+        # "✓ Logged in to github.com account eoin-obrien (...)"
+        m = re.search(r"Logged in to (\S+) account (\S+)", line)
+        if m:
+            hostname = m.group(1)
+            account = m.group(2).rstrip("()")
+        # "- Token scopes: 'repo', 'read:org', ..."  OR oauth_token legacy format
+        elif re.search(r"Token scopes:", line, re.IGNORECASE) or "oauth_token" in line.lower():
             scopes_part = line.split(":", 1)[-1]
             scopes = [s.strip().strip("'\"") for s in scopes_part.split(",") if s.strip()]
 
