@@ -1,3 +1,20 @@
+## 0.3.0 (2026-02-18)
+
+### Feat
+
+- add --verify flag to check archive integrity after compression
+- add --shallow clone option
+- add --dry-run mode
+- add --skip-forks, --skip-archived, and --visibility filters
+- warn on missing token scopes before export
+
+### Fix
+
+- remove partial clone directory on definitive failure
+- use regex for robust gh auth status output parsing
+- redact token from clone error messages
+- read __version__ dynamically from package metadata
+
 ## 0.2.0 (2026-02-18)
 
 ### Feat
