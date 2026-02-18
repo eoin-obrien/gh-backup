@@ -1,6 +1,6 @@
 [project]
 name = "gh-backup"
-version = "0.1.0"
+version = "0.1.1"
 description = "Backup a GitHub organization or user: repos, issues, and pull requests"
 readme = "README.md"
 requires-python = ">=3.13"
