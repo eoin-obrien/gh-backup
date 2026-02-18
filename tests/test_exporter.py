@@ -151,7 +151,7 @@ class TestCloneRepo:
             "gh_backup.exporter.subprocess.run",
             side_effect=subprocess.CalledProcessError(128, "git"),
         )
-        mocker.patch("tenacity.nap.time.sleep")
+        mocker.patch("gh_backup.exporter._sleep_or_cancel")
         with pytest.raises(subprocess.CalledProcessError):
             _clone_repo(repo, tmp_path / "repo.git", "mytoken")
         assert mock_run.call_count == 3
@@ -166,7 +166,7 @@ class TestCloneRepo:
                 raise subprocess.CalledProcessError(128, "git")
 
         mocker.patch("gh_backup.exporter.subprocess.run", side_effect=side_effect)
-        mocker.patch("tenacity.nap.time.sleep")
+        mocker.patch("gh_backup.exporter._sleep_or_cancel")
         _clone_repo(repo, tmp_path / "repo.git", "mytoken")
         assert call_count["n"] == 2
 
@@ -241,7 +241,7 @@ class TestExportRepoIssues:
         assert written == issues
 
     def test_retries_three_times_on_fetch_error(self, mocker, tmp_path):
-        mocker.patch("tenacity.nap.time.sleep")
+        mocker.patch("gh_backup.exporter._sleep_or_cancel")
         mock_fetch = mocker.patch(
             "gh_backup.exporter.fetch_issues",
             side_effect=subprocess.CalledProcessError(1, "gh"),
@@ -417,12 +417,11 @@ class TestRunExport:
         mocker.patch("gh_backup.github.list_repos", return_value=two_repos)
         call_count = {"n": 0}
 
-        def clone_side_effect(repo, dest, token):
+        def clone_side_effect(repo, dest, token, stop_event=None):
             call_count["n"] += 1
             if call_count["n"] == 1:
                 raise subprocess.CalledProcessError(128, "git")
 
-        mocker.patch("tenacity.nap.time.sleep")
         mocker.patch("gh_backup.exporter._clone_repo", side_effect=clone_side_effect)
         mocker.patch("gh_backup.exporter._export_repo_issues", return_value=(0, 0))
 
