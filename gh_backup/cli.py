@@ -114,6 +114,10 @@ def export_command(
         bool,
         typer.Option("--keep-dir", help="Keep the uncompressed directory after archiving."),
     ] = False,
+    verify: Annotated[
+        bool,
+        typer.Option("--verify", help="Verify archive integrity after compression."),
+    ] = False,
     fmt: Annotated[
         ArchiveFormat,
         typer.Option("--format", help="Archive format.", show_default=True),
@@ -211,6 +215,7 @@ def export_command(
         git_gc=git_gc,
         dry_run=dry_run,
         shallow=shallow,
+        verify=verify,
     )
 
     if shallow and git_gc:

@@ -35,7 +35,7 @@ from tenacity import (
 
 from . import __version__
 from .auth import AccountType
-from .compress import ArchiveFormat, compress_directory, get_archive_suffix
+from .compress import ArchiveFormat, compress_directory, get_archive_suffix, verify_archive
 from .github import ExportStats, RepoInfo, fetch_issues, fetch_pulls
 
 log = logging.getLogger(__name__)
@@ -81,6 +81,7 @@ class ExportConfig:
     visibility: Visibility = Visibility.ALL
     dry_run: bool = False
     shallow: bool = False
+    verify: bool = False
 
 
 @dataclass
@@ -475,6 +476,15 @@ def run_export(config: ExportConfig, console: Console) -> ExportStats:
             f"Archive: [bold green]{archive_path}[/] "
             f"([bold]{stats.bytes_compressed / 1_048_576:.1f} MB[/])"
         )
+
+        if config.verify:
+            console.print("Verifying archive integrity...")
+            try:
+                member_count = verify_archive(archive_path)
+                console.print(f"[green]Verification passed[/] ({member_count} members).")
+            except Exception as e:
+                console.print(f"[bold red]Verification failed:[/] {e}")
+                raise RuntimeError(f"Archive verification failed: {e}") from e
     else:
         console.print(f"\nExport saved to [bold green]{export_dir}[/]")
 

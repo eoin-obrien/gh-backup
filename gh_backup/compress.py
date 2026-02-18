@@ -39,9 +39,7 @@ def compress_directory(
         raise FileNotFoundError(f"Source directory not found: {source_dir}")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    log.info(
-        "Compressing %s → %s (format=%s, level=%d)", source_dir, output_path, fmt, level
-    )
+    log.info("Compressing %s → %s (format=%s, level=%d)", source_dir, output_path, fmt, level)
 
     try:
         if fmt == ArchiveFormat.ZST:
@@ -90,6 +88,34 @@ def _compress_zst(
                         if not any(dpath.iterdir()):
                             arcname = dpath.relative_to(source_dir.parent)
                             tar.add(str(dpath), arcname=str(arcname), recursive=False)
+
+
+def verify_archive(archive_path: Path) -> int:
+    """Open the archive and iterate all members to verify integrity.
+
+    Returns the number of members verified.
+    Raises tarfile.TarError or zstandard.ZstdError on corruption.
+    """
+    if not archive_path.exists():
+        raise FileNotFoundError(f"Archive not found: {archive_path}")
+
+    log.info("Verifying archive: %s", archive_path)
+    name = archive_path.name
+
+    if name.endswith(".tar.zst"):
+        import zstandard
+
+        with open(archive_path, "rb") as f:
+            dctx = zstandard.ZstdDecompressor()
+            with dctx.stream_reader(f) as reader:
+                with tarfile.open(fileobj=reader, mode="r|") as tar:
+                    count = sum(1 for _ in tar)
+    else:
+        with tarfile.open(str(archive_path), "r:*") as tar:
+            count = sum(1 for _ in tar)
+
+    log.info("Verified %d members in %s", count, archive_path)
+    return count
 
 
 def _compress_stdlib(

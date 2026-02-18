@@ -10,6 +10,7 @@ from gh_backup.compress import (
     ArchiveFormat,
     compress_directory,
     get_archive_suffix,
+    verify_archive,
 )
 
 # ── get_archive_suffix ────────────────────────────────────────────────────────
@@ -152,6 +153,23 @@ class TestCompressXz:
         output = tmp_path / "out.tar.xz"
         compress_directory(source_dir=source_dir, output_path=output, fmt=ArchiveFormat.XZ)
         assert output.stat().st_size > 0
+
+
+# ── verify_archive ────────────────────────────────────────────────────────────
+
+
+class TestVerifyArchive:
+    def test_raises_file_not_found_for_missing_archive(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            verify_archive(tmp_path / "nonexistent.tar.zst")
+
+    @pytest.mark.parametrize("fmt", [ArchiveFormat.ZST, ArchiveFormat.GZ, ArchiveFormat.XZ])
+    def test_returns_positive_member_count_for_valid_archive(self, source_dir, tmp_path, fmt):
+        suffix = get_archive_suffix(fmt)
+        output = tmp_path / f"out{suffix}"
+        compress_directory(source_dir=source_dir, output_path=output, fmt=fmt)
+        count = verify_archive(output)
+        assert count > 0
 
 
 # ── edge cases ────────────────────────────────────────────────────────────────
