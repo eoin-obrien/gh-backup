@@ -100,12 +100,18 @@ jobs:
 
       - name: Run tests
         run: |
-          uv run pytest; code=$?
+          uv run pytest --cov-report=xml; code=$?
           if [ "$code" -eq 5 ]; then
             echo "::warning::No tests collected (pytest exit 5). Add tests to the tests/ directory."
             exit 0
           fi
           exit "$code"
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
 
       - name: Prune uv cache
         run: uv cache prune --ci
