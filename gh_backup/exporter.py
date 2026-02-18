@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import subprocess
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -24,8 +25,8 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from tenacity import (
+    Retrying,
     before_sleep_log,
-    retry,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
@@ -37,6 +38,22 @@ from .compress import ArchiveFormat, compress_directory, get_archive_suffix
 from .github import ExportStats, RepoInfo, fetch_issues, fetch_pulls
 
 log = logging.getLogger(__name__)
+
+
+class ExportCancelled(Exception):
+    """Raised when the export is cancelled via stop_event."""
+
+
+def _sleep_or_cancel(stop_event: threading.Event, seconds: float) -> None:
+    """Sleep up to `seconds`, but wake immediately if stop_event is set."""
+    if stop_event.wait(timeout=seconds):
+        raise ExportCancelled()
+
+
+def _log_before_sleep(stop_event: threading.Event, retry_state) -> None:
+    """Log a retry warning, suppressed when the export is being cancelled."""
+    if not stop_event.is_set():
+        before_sleep_log(log, logging.WARNING)(retry_state)
 
 
 @dataclass
@@ -114,24 +131,34 @@ def write_metadata(
     (export_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=30),
-    retry=retry_if_exception_type(subprocess.CalledProcessError),
-    reraise=True,
-    before_sleep=before_sleep_log(log, logging.WARNING),
-)
-def _clone_repo(repo: RepoInfo, dest: Path, token: str) -> None:
+def _clone_repo(
+    repo: RepoInfo,
+    dest: Path,
+    token: str,
+    stop_event: threading.Event | None = None,
+) -> None:
     """Mirror-clone a repo with full history into `dest`."""
-    # Build authenticated HTTPS URL
+    if stop_event is None:
+        stop_event = threading.Event()
     clone_url = repo.url.replace("https://", f"https://oauth2:{token}@")
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-    subprocess.run(
-        ["git", "clone", "--mirror", clone_url, str(dest)],
-        check=True,
-        capture_output=True,
-        env=env,
-    )
+    for attempt in Retrying(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        retry=retry_if_exception_type(subprocess.CalledProcessError),
+        reraise=True,
+        before_sleep=lambda rs: _log_before_sleep(stop_event, rs),
+        sleep=lambda s: _sleep_or_cancel(stop_event, s),
+    ):
+        with attempt:
+            if stop_event.is_set():
+                raise ExportCancelled()
+            subprocess.run(
+                ["git", "clone", "--mirror", clone_url, str(dest)],
+                check=True,
+                capture_output=True,
+                env=env,
+            )
 
 
 def _gc_repo(clone_path: Path) -> None:
@@ -143,23 +170,37 @@ def _gc_repo(clone_path: Path) -> None:
     )
 
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=4, max=60),
-    retry=retry_if_exception_type(subprocess.CalledProcessError),
-    reraise=True,
-    before_sleep=before_sleep_log(log, logging.WARNING),
-)
-def _export_repo_issues(org: str, repo_name: str, issues_dir: Path) -> tuple[int, int]:
+def _export_repo_issues(
+    org: str,
+    repo_name: str,
+    issues_dir: Path,
+    stop_event: threading.Event | None = None,
+) -> tuple[int, int]:
     """Fetch issues and PRs for a repo and write JSON files.
 
     Returns (issues_count, pulls_count).
     """
+    if stop_event is None:
+        stop_event = threading.Event()
     repo_issues_dir = issues_dir / repo_name
     repo_issues_dir.mkdir(parents=True, exist_ok=True)
-
-    issues = fetch_issues(org, repo_name)
-    pulls = fetch_pulls(org, repo_name)
+    issues: list[dict] = []
+    pulls: list[dict] = []
+    for attempt in Retrying(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=60),
+        retry=retry_if_exception_type(subprocess.CalledProcessError),
+        reraise=True,
+        before_sleep=lambda rs: _log_before_sleep(stop_event, rs),
+        sleep=lambda s: _sleep_or_cancel(stop_event, s),
+    ):
+        with attempt:
+            if stop_event.is_set():
+                raise ExportCancelled()
+            issues = fetch_issues(org, repo_name)
+            if stop_event.is_set():
+                raise ExportCancelled()
+            pulls = fetch_pulls(org, repo_name)
 
     (repo_issues_dir / "issues.json").write_text(json.dumps(issues, indent=2))
     (repo_issues_dir / "pulls.json").write_text(json.dumps(pulls, indent=2))
@@ -174,8 +215,11 @@ def _export_repo(
     issues_dir: Path,
     progress: Progress,
     overall_task: TaskID,
+    stop_event: threading.Event | None = None,
 ) -> RepoResult:
     """Export a single repo: clone + issues/PRs. Called from worker threads."""
+    if stop_event is None:
+        stop_event = threading.Event()
     steps = 4 if config.git_gc else 3
     task = progress.add_task(f"[cyan]{repo.name}[/]", total=steps, visible=True)
     clone_path = repos_dir / f"{repo.name}.git"
@@ -185,16 +229,17 @@ def _export_repo(
     try:
         # Clone
         progress.update(task, description=f"[cyan]clone:[/] {repo.name}")
-        _clone_repo(repo, clone_path, config.token)
+        _clone_repo(repo, clone_path, config.token, stop_event)
         progress.advance(task)
 
         # GC (optional)
         if config.git_gc:
             progress.update(task, description=f"[cyan]gc:[/] {repo.name}")
-            try:
-                _gc_repo(clone_path)
-            except Exception as e:
-                log.warning("git gc failed for %s: %s", repo.name, e)
+            if not stop_event.is_set():
+                try:
+                    _gc_repo(clone_path)
+                except Exception as e:
+                    log.warning("git gc failed for %s: %s", repo.name, e)
             progress.advance(task)
 
         # Export issues/PRs
@@ -202,8 +247,10 @@ def _export_repo(
             progress.update(task, description=f"[cyan]issues:[/] {repo.name}")
             try:
                 issues_count, pulls_count = _export_repo_issues(
-                    config.org, repo.name, issues_dir
+                    config.org, repo.name, issues_dir, stop_event
                 )
+            except ExportCancelled:
+                raise
             except Exception as e:
                 log.warning("Issues export failed for %s: %s", repo.name, e)
         progress.advance(task)
@@ -222,6 +269,12 @@ def _export_repo(
             pulls_count=pulls_count,
         )
 
+    except ExportCancelled:
+        progress.update(
+            task, description=f"[yellow]cancelled:[/] {repo.name}", visible=False
+        )
+        progress.advance(overall_task)
+        return RepoResult(repo=repo, success=False, error="Cancelled")
     except Exception as e:
         progress.update(task, description=f"[red]failed:[/] {repo.name}", visible=False)
         progress.advance(overall_task)
@@ -261,6 +314,7 @@ def run_export(config: ExportConfig, console: Console) -> ExportStats:
     )
 
     results: list[RepoResult] = []
+    stop_event = threading.Event()
 
     progress_columns = [
         SpinnerColumn(),
@@ -290,6 +344,7 @@ def run_export(config: ExportConfig, console: Console) -> ExportStats:
                     issues_dir,
                     progress,
                     overall_task,
+                    stop_event,
                 ): repo
                 for repo in repos
             }
@@ -298,6 +353,7 @@ def run_export(config: ExportConfig, console: Console) -> ExportStats:
                     result = future.result()
                     results.append(result)
             except KeyboardInterrupt:
+                stop_event.set()
                 console.print(
                     "\n[yellow]Interrupted — cancelling remaining downloads...[/]"
                 )
@@ -324,25 +380,30 @@ def run_export(config: ExportConfig, console: Console) -> ExportStats:
             f.stat().st_size for f in export_dir.rglob("*") if f.is_file()
         )
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            compress_task = progress.add_task("Compressing...", total=source_size)
+        try:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console,
+            ) as progress:
+                compress_task = progress.add_task("Compressing...", total=source_size)
 
-            def _update_progress(bytes_written: int) -> None:
-                progress.update(compress_task, completed=bytes_written)
+                def _update_progress(bytes_written: int) -> None:
+                    progress.update(compress_task, completed=bytes_written)
 
-            compress_directory(
-                source_dir=export_dir,
-                output_path=archive_path,
-                fmt=config.fmt,
-                level=3,
-                progress_callback=_update_progress,
-            )
+                compress_directory(
+                    source_dir=export_dir,
+                    output_path=archive_path,
+                    fmt=config.fmt,
+                    level=3,
+                    progress_callback=_update_progress,
+                )
+        except KeyboardInterrupt:
+            if archive_path.exists():
+                archive_path.unlink()
+            raise
 
         stats.bytes_compressed = archive_path.stat().st_size
 
