@@ -13,7 +13,6 @@ from rich.panel import Panel
 from rich.table import Table
 
 from . import __version__
-from .auth import AccountType
 from .compress import ArchiveFormat
 from .exporter import ExportConfig, run_export
 
@@ -21,7 +20,7 @@ APP_NAME = "gh-backup"
 
 app = typer.Typer(
     name=APP_NAME,
-    help=f"[bold]{APP_NAME}[/] — Backup a GitHub organization: repos, issues, and PRs.\n\n"
+    help=f"[bold]{APP_NAME}[/] — Backup a GitHub organization or user: repos, issues, and PRs.\n\n"
     "Clones all repositories with full git history and exports issues/PRs as JSON, "
     "then compresses everything into a [cyan].tar.zst[/] archive.",
     rich_markup_mode="rich",
@@ -142,18 +141,12 @@ def export_command(
         list[str] | None,
         typer.Option("--repos", "-r", help="Only export this repo (repeatable)."),
     ] = None,
-    account_type: Annotated[
-        AccountType,
-        typer.Option(
-            "--type", "-t", help="GitHub account type: org or user.", show_default=True
-        ),
-    ] = AccountType.ORG,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable debug logging."),
     ] = False,
 ) -> None:
-    """Export a GitHub organization's repositories, issues, and pull requests.
+    """Export a GitHub organization's or user's repositories, issues, and pull requests.
 
     Each export run is stored in a timestamped subdirectory under OUTPUT,
     then compressed into a [cyan].tar.zst[/] archive (best size/speed tradeoff).
@@ -164,7 +157,7 @@ def export_command(
       gh-backup export myorg --output /backups --workers 8
       gh-backup export myorg --output /backups --repos frontend --repos backend
       gh-backup export myorg --output /backups --skip-issues --no-compress
-      gh-backup export myusername --output /backups --type user
+      gh-backup export myusername --output /backups
     """
     _setup_logging(verbose)
     from . import auth
@@ -181,14 +174,11 @@ def export_command(
         f"Authenticated as [bold green]{auth_state.account}[/] on {auth_state.hostname}"
     )
 
-    account_label = "organization" if account_type == AccountType.ORG else "user"
-    console.print(f"Checking access to {account_label} [bold cyan]{org}[/]...")
-
-    if not auth.check_account_access(org, account_type):
-        console.print(
-            f"[bold red]Error:[/] Cannot access {account_label} '[cyan]{org}[/]'. "
-            "Check the name and your permissions."
-        )
+    console.print(f"Resolving [bold cyan]{org}[/]...")
+    try:
+        account_type = auth.resolve_account_type(org)
+    except RuntimeError as e:
+        console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
 
     config = ExportConfig(

@@ -10,10 +10,10 @@ import typer
 from gh_backup.auth import (
     AccountType,
     AuthState,
-    check_account_access,
     check_auth,
     get_token,
     require_auth,
+    resolve_account_type,
 )
 from tests.conftest import GH_AUTH_STATUS_LOGGED_IN, make_completed_process
 
@@ -187,39 +187,46 @@ class TestRequireAuth:
         assert exc_info.value.exit_code == 1
 
 
-# ── check_account_access ──────────────────────────────────────────────────────
+# ── resolve_account_type ──────────────────────────────────────────────────────
 
 
-class TestCheckAccountAccess:
-    @pytest.mark.parametrize(
-        "account_type,name,expected_path",
-        [
-            (AccountType.ORG, "myorg", "/orgs/myorg"),
-            (AccountType.USER, "myuser", "/users/myuser"),
-        ],
-    )
-    def test_uses_correct_api_endpoint(self, mocker, account_type, name, expected_path):
-        mock_run = mocker.patch(
-            "gh_backup.auth.subprocess.run",
-            return_value=make_completed_process(returncode=0),
-        )
-        check_account_access(name, account_type)
-        called_args = mock_run.call_args[0][0]
-        assert expected_path in called_args
-
-    def test_returns_true_on_success(self, mocker):
+class TestResolveAccountType:
+    def test_returns_org_when_org_endpoint_succeeds(self, mocker):
         mocker.patch(
             "gh_backup.auth.subprocess.run",
             return_value=make_completed_process(returncode=0),
         )
-        assert check_account_access("myorg", AccountType.ORG) is True
+        assert resolve_account_type("myorg") == AccountType.ORG
 
-    def test_returns_false_on_called_process_error(self, mocker):
+    def test_returns_user_when_org_fails_but_user_succeeds(self, mocker):
+        mocker.patch(
+            "gh_backup.auth.subprocess.run",
+            side_effect=[
+                subprocess.CalledProcessError(404, "gh"),
+                make_completed_process(returncode=0),
+            ],
+        )
+        assert resolve_account_type("myuser") == AccountType.USER
+
+    def test_raises_when_both_endpoints_fail(self, mocker):
         mocker.patch(
             "gh_backup.auth.subprocess.run",
             side_effect=subprocess.CalledProcessError(404, "gh"),
         )
-        assert check_account_access("nonexistent", AccountType.ORG) is False
+        with pytest.raises(RuntimeError, match="not found"):
+            resolve_account_type("nonexistent")
+
+    def test_tries_org_endpoint_first(self, mocker):
+        calls = []
+
+        def side_effect(cmd, **kwargs):
+            calls.append(cmd)
+            raise subprocess.CalledProcessError(404, "gh")
+
+        mocker.patch("gh_backup.auth.subprocess.run", side_effect=side_effect)
+        with pytest.raises(RuntimeError):
+            resolve_account_type("name")
+        assert any("/orgs/name" in c for c in calls[0])
 
 
 # ── AuthState dataclass ───────────────────────────────────────────────────────

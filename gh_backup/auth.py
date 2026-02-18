@@ -119,16 +119,26 @@ def get_token() -> str:
         raise RuntimeError("GitHub CLI (gh) not found.")
 
 
-def check_account_access(name: str, account_type: AccountType) -> bool:
-    """Return True if the current user can access the given org or user account."""
-    endpoint = f"/orgs/{name}" if account_type == AccountType.ORG else f"/users/{name}"
-    try:
-        subprocess.run(
-            ["gh", "api", endpoint],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return True
-    except subprocess.CalledProcessError:
-        return False
+def resolve_account_type(name: str) -> AccountType:
+    """Detect whether `name` is a GitHub org or user by probing the API.
+
+    Tries /orgs/{name} first; falls back to /users/{name}.
+    Raises RuntimeError if neither endpoint succeeds.
+    """
+    for account_type, endpoint in [
+        (AccountType.ORG, f"/orgs/{name}"),
+        (AccountType.USER, f"/users/{name}"),
+    ]:
+        try:
+            subprocess.run(
+                ["gh", "api", endpoint],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return account_type
+        except subprocess.CalledProcessError:
+            continue
+    raise RuntimeError(
+        f"'{name}' not found as an org or user. Check the name and your permissions."
+    )

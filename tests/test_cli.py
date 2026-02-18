@@ -36,7 +36,7 @@ def mock_auth_ok(mocker):
     mocker.patch("gh_backup.auth.check_auth", return_value=state)
     mocker.patch("gh_backup.auth.require_auth", return_value=state)
     mocker.patch("gh_backup.auth.get_token", return_value="ghs_tok")
-    mocker.patch("gh_backup.auth.check_account_access", return_value=True)
+    mocker.patch("gh_backup.auth.resolve_account_type", return_value=AccountType.ORG)
     return state
 
 
@@ -148,11 +148,14 @@ class TestExportCommand:
         result = runner.invoke(app, ["export", "myorg", "--output", str(tmp_path)])
         assert result.exit_code == 1
 
-    def test_no_account_access_exits_one(self, mocker, mock_auth_ok, tmp_path):
-        mocker.patch("gh_backup.auth.check_account_access", return_value=False)
-        result = runner.invoke(app, ["export", "myorg", "--output", str(tmp_path)])
+    def test_unresolvable_name_exits_one(self, mocker, mock_auth_ok, tmp_path):
+        mocker.patch(
+            "gh_backup.auth.resolve_account_type",
+            side_effect=RuntimeError("'bad' not found as an org or user."),
+        )
+        result = runner.invoke(app, ["export", "bad", "--output", str(tmp_path)])
         assert result.exit_code == 1
-        assert "Cannot access" in result.output
+        assert "not found" in result.output
 
     def test_get_token_runtime_error_exits_one(self, mocker, tmp_path):
         state = AuthState(True, "user", "github.com", "tok", [])
@@ -262,7 +265,12 @@ class TestExportCommand:
         )
         assert str(captured["config"].fmt) == expected_value
 
-    def test_type_user_sets_account_type(self, mocker, mock_auth_ok, tmp_path):
+    def test_resolved_account_type_stored_in_config(
+        self, mocker, mock_auth_ok, tmp_path
+    ):
+        mocker.patch(
+            "gh_backup.auth.resolve_account_type", return_value=AccountType.USER
+        )
         captured = {}
 
         def capture(config, console):
@@ -270,10 +278,7 @@ class TestExportCommand:
             return ExportStats(repos_total=0)
 
         mocker.patch("gh_backup.cli.run_export", side_effect=capture)
-        runner.invoke(
-            app,
-            ["export", "myorg", "--output", str(tmp_path), "--type", "user"],
-        )
+        runner.invoke(app, ["export", "myuser", "--output", str(tmp_path)])
         assert captured["config"].account_type == AccountType.USER
 
     def test_keep_dir_flag_sets_config(self, mocker, mock_auth_ok, tmp_path):
