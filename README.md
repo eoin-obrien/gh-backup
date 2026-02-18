@@ -15,16 +15,20 @@ Clones all repositories with full git history and exports issues/PRs as JSON, th
 
 ## Requirements
 
-- [uv](https://docs.astral.sh/uv/)
 - [GitHub CLI (`gh`)](https://cli.github.com/) — authenticated with a token that has `repo` and `read:org` scopes
 
-## Setup
+## Installation
 
 ```bash
-make install
-```
+# uv (recommended)
+uv tool install gh-backup
 
-This installs dependencies and sets up pre-commit hooks.
+# pip
+pip install gh-backup
+
+# pipx
+pipx install gh-backup
+```
 
 ## Authentication
 
@@ -107,3 +111,15 @@ The archive unpacks to:
 | `1` | Export failed |
 | `2` | Partial failure — some repos failed, others succeeded |
 | `130` | Cancelled with Ctrl+C |
+
+## Development
+
+Requires [uv](https://docs.astral.sh/uv/).
+
+```bash
+make install    # Install dependencies and set up pre-commit hooks
+make test       # Run the test suite
+make lint       # Check linting and formatting (ruff)
+make lint-fix   # Auto-fix linting and formatting issues
+make commit     # Create a conventional commit (via commitizen)
+```
