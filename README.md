@@ -1,14 +1,14 @@
 # gh-backup
 
 [![CI](https://github.com/eoin-obrien/gh-backup/actions/workflows/ci.yml/badge.svg)](https://github.com/eoin-obrien/gh-backup/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/eoin-obrien/gh-backup/branch/master/graph/badge.svg)](https://codecov.io/gh/eoin-obrien/gh-backup)
 [![PyPI](https://img.shields.io/pypi/v/gh-backup)](https://pypi.org/project/gh-backup/)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
-[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://conventionalcommits.org)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
-[![codecov](https://codecov.io/gh/eoin-obrien/gh-backup/branch/master/graph/badge.svg)](https://codecov.io/gh/eoin-obrien/gh-backup)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://conventionalcommits.org)
 
 Backup a GitHub organization or user: repos, issues, and pull requests.
 
