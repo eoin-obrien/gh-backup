@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from rich.console import Console
+from rich.table import Column
 from rich.progress import (
     BarColumn,
     Progress,
@@ -263,14 +264,18 @@ def run_export(config: ExportConfig, console: Console) -> ExportStats:
 
     progress_columns = [
         SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
+        TextColumn(
+            "[progress.description]{task.description}", table_column=Column(ratio=1)
+        ),
+        BarColumn(bar_width=None, table_column=Column(ratio=1)),
         TaskProgressColumn(),
         TextColumn("•"),
         TimeRemainingColumn(),
     ]
 
-    with Progress(*progress_columns, console=console, transient=False) as progress:
+    with Progress(
+        *progress_columns, console=console, transient=False, expand=True
+    ) as progress:
         overall_task = progress.add_task(
             f"[bold]Exporting {config.org}[/]", total=len(repos)
         )
