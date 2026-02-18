@@ -79,6 +79,7 @@ class ExportConfig:
     skip_forks: bool = False
     skip_archived: bool = False
     visibility: Visibility = Visibility.ALL
+    dry_run: bool = False
 
 
 @dataclass
@@ -337,6 +338,30 @@ def run_export(config: ExportConfig, console: Console) -> ExportStats:
 
     stats.repos_total = len(repos)
     console.print(f"Found [bold]{len(repos)}[/] repositories.")
+
+    # Dry-run: print what would be exported and stop.
+    if config.dry_run:
+        total_kb = sum(r.disk_usage_kb for r in repos)
+        console.print(
+            f"Estimated size: [bold]{total_kb / 1024:.1f} MB[/] "
+            f"(reported by GitHub, actual clone may differ)"
+        )
+        console.print(
+            "\n[bold cyan]Dry run — no files written.[/] Repositories that would be exported:\n"
+        )
+        for repo in repos:
+            tags = " ".join(
+                f"[dim]{t}[/]"
+                for t in (
+                    ["fork"]
+                    if repo.is_fork
+                    else []
+                    + (["archived"] if repo.is_archived else [])
+                    + (["private"] if repo.is_private else ["public"])
+                )
+            )
+            console.print(f"  [cyan]{repo.name}[/] {tags}")
+        return stats
 
     # Create export directory
     export_dir = create_export_dir(config.output_dir, config.org)

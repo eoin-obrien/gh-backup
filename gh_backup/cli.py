@@ -141,6 +141,10 @@ def export_command(
         Visibility,
         typer.Option("--visibility", help="Only export repos with this visibility."),
     ] = Visibility.ALL,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="List repos that would be exported; write nothing."),
+    ] = False,
     repos: Annotated[
         list[str] | None,
         typer.Option("--repos", "-r", help="Only export this repo (repeatable)."),
@@ -201,6 +205,7 @@ def export_command(
         account_type=account_type,
         keep_dir=keep_dir,
         git_gc=git_gc,
+        dry_run=dry_run,
     )
 
     try:
