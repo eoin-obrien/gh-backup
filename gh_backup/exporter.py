@@ -50,6 +50,7 @@ class ExportConfig:
     token: str
     account_type: AccountType = AccountType.ORG
     keep_dir: bool = False
+    git_gc: bool = False
 
 
 @dataclass
@@ -132,6 +133,15 @@ def _clone_repo(repo: RepoInfo, dest: Path, token: str) -> None:
     )
 
 
+def _gc_repo(clone_path: Path) -> None:
+    """Run git gc --aggressive --prune=now on a bare clone to shrink pack files."""
+    subprocess.run(
+        ["git", "-C", str(clone_path), "gc", "--aggressive", "--prune=now", "--quiet"],
+        check=True,
+        capture_output=True,
+    )
+
+
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=4, max=60),
@@ -165,7 +175,8 @@ def _export_repo(
     overall_task: TaskID,
 ) -> RepoResult:
     """Export a single repo: clone + issues/PRs. Called from worker threads."""
-    task = progress.add_task(f"[cyan]{repo.name}[/]", total=3, visible=True)
+    steps = 4 if config.git_gc else 3
+    task = progress.add_task(f"[cyan]{repo.name}[/]", total=steps, visible=True)
     clone_path = repos_dir / f"{repo.name}.git"
     issues_count = 0
     pulls_count = 0
@@ -175,6 +186,15 @@ def _export_repo(
         progress.update(task, description=f"[cyan]clone:[/] {repo.name}")
         _clone_repo(repo, clone_path, config.token)
         progress.advance(task)
+
+        # GC (optional)
+        if config.git_gc:
+            progress.update(task, description=f"[cyan]gc:[/] {repo.name}")
+            try:
+                _gc_repo(clone_path)
+            except Exception as e:
+                log.warning("git gc failed for %s: %s", repo.name, e)
+            progress.advance(task)
 
         # Export issues/PRs
         if not config.skip_issues:

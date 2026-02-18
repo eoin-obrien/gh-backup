@@ -127,6 +127,13 @@ def export_command(
         ArchiveFormat,
         typer.Option("--format", help="Archive format.", show_default=True),
     ] = ArchiveFormat.ZST,
+    git_gc: Annotated[
+        bool,
+        typer.Option(
+            "--gc",
+            help="Run 'git gc --aggressive' on each clone before archiving to shrink pack files.",
+        ),
+    ] = False,
     skip_issues: Annotated[
         bool,
         typer.Option("--skip-issues", help="Skip issues and pull request export."),
@@ -195,6 +202,7 @@ def export_command(
         token=token,
         account_type=account_type,
         keep_dir=keep_dir,
+        git_gc=git_gc,
     )
 
     try:

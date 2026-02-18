@@ -16,6 +16,7 @@ from gh_backup.exporter import (
     _clone_repo,
     _export_repo,
     _export_repo_issues,
+    _gc_repo,
     create_export_dir,
     run_export,
     write_metadata,
@@ -170,6 +171,27 @@ class TestCloneRepo:
         assert call_count["n"] == 2
 
 
+# ── _gc_repo ──────────────────────────────────────────────────────────────────
+
+
+class TestGcRepo:
+    def test_calls_git_gc_aggressive(self, mocker, tmp_path):
+        mock_run = mocker.patch("gh_backup.exporter.subprocess.run")
+        _gc_repo(tmp_path / "repo.git")
+        args = mock_run.call_args[0][0]
+        assert "gc" in args
+        assert "--aggressive" in args
+        assert "--prune=now" in args
+
+    def test_raises_on_failure(self, mocker, tmp_path):
+        mocker.patch(
+            "gh_backup.exporter.subprocess.run",
+            side_effect=subprocess.CalledProcessError(128, "git"),
+        )
+        with pytest.raises(subprocess.CalledProcessError):
+            _gc_repo(tmp_path / "repo.git")
+
+
 # ── _export_repo_issues ───────────────────────────────────────────────────────
 
 
@@ -301,6 +323,55 @@ class TestExportRepo:
         )
         assert result.success is True
         assert result.issues_count == 0
+
+    def test_gc_called_when_git_gc_true(self, mocker, repo, export_config, tmp_path):
+        export_config.git_gc = True
+        mocker.patch("gh_backup.exporter._clone_repo")
+        mocker.patch("gh_backup.exporter._export_repo_issues", return_value=(0, 0))
+        mock_gc = mocker.patch("gh_backup.exporter._gc_repo")
+        repos_dir = tmp_path / "repos"
+        repos_dir.mkdir()
+        issues_dir = tmp_path / "issues"
+        issues_dir.mkdir()
+
+        result = _export_repo(
+            repo, export_config, repos_dir, issues_dir, _make_progress(), 0
+        )
+        assert result.success is True
+        mock_gc.assert_called_once_with(repos_dir / f"{repo.name}.git")
+
+    def test_gc_not_called_when_git_gc_false(
+        self, mocker, repo, export_config, tmp_path
+    ):
+        export_config.git_gc = False
+        mocker.patch("gh_backup.exporter._clone_repo")
+        mocker.patch("gh_backup.exporter._export_repo_issues", return_value=(0, 0))
+        mock_gc = mocker.patch("gh_backup.exporter._gc_repo")
+        repos_dir = tmp_path / "repos"
+        repos_dir.mkdir()
+        issues_dir = tmp_path / "issues"
+        issues_dir.mkdir()
+
+        _export_repo(repo, export_config, repos_dir, issues_dir, _make_progress(), 0)
+        mock_gc.assert_not_called()
+
+    def test_gc_failure_does_not_fail_repo(self, mocker, repo, export_config, tmp_path):
+        export_config.git_gc = True
+        mocker.patch("gh_backup.exporter._clone_repo")
+        mocker.patch("gh_backup.exporter._export_repo_issues", return_value=(0, 0))
+        mocker.patch(
+            "gh_backup.exporter._gc_repo",
+            side_effect=subprocess.CalledProcessError(128, "git"),
+        )
+        repos_dir = tmp_path / "repos"
+        repos_dir.mkdir()
+        issues_dir = tmp_path / "issues"
+        issues_dir.mkdir()
+
+        result = _export_repo(
+            repo, export_config, repos_dir, issues_dir, _make_progress(), 0
+        )
+        assert result.success is True
 
     def test_clone_path_set_on_success(self, mocker, repo, export_config, tmp_path):
         mocker.patch("gh_backup.exporter._clone_repo")
