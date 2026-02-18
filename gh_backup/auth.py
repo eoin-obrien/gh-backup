@@ -37,14 +37,10 @@ def check_auth() -> AuthState:
             check=False,
         )
     except FileNotFoundError:
-        raise RuntimeError(
-            "GitHub CLI (gh) not found. Install it from https://cli.github.com/"
-        )
+        raise RuntimeError("GitHub CLI (gh) not found. Install it from https://cli.github.com/")
 
     if result.returncode != 0:
-        return AuthState(
-            logged_in=False, account=None, hostname="github.com", token=None
-        )
+        return AuthState(logged_in=False, account=None, hostname="github.com", token=None)
 
     # gh auth status writes to stderr
     output = result.stderr or result.stdout
@@ -67,9 +63,7 @@ def check_auth() -> AuthState:
         elif "Token scopes:" in line or "oauth_token" in line.lower():
             # "Token scopes: 'repo', 'read:org', ..."
             scopes_part = line.split(":", 1)[-1]
-            scopes = [
-                s.strip().strip("'\"") for s in scopes_part.split(",") if s.strip()
-            ]
+            scopes = [s.strip().strip("'\"") for s in scopes_part.split(",") if s.strip()]
 
     token: str | None = None
     try:
@@ -117,6 +111,28 @@ def get_token() -> str:
         raise RuntimeError(f"Failed to get GitHub token: {e.stderr.strip()}") from e
     except FileNotFoundError:
         raise RuntimeError("GitHub CLI (gh) not found.")
+
+
+def warn_missing_scopes(state: AuthState) -> list[str]:
+    """Return a list of warning messages for likely missing token scopes.
+
+    Only warns when scopes are non-empty (i.e. we successfully parsed them),
+    to avoid false positives with fine-grained tokens or parsing failures.
+    """
+    warnings: list[str] = []
+    if not state.scopes:
+        return warnings
+    if "repo" not in state.scopes:
+        warnings.append(
+            "Token is missing the [bold]repo[/] scope — private repository clones will fail. "
+            "Run [bold cyan]gh auth refresh -s repo[/] to add it."
+        )
+    if "read:org" not in state.scopes:
+        warnings.append(
+            "Token is missing the [bold]read:org[/] scope — organization repository listing "
+            "may fail. Run [bold cyan]gh auth refresh -s read:org[/] to add it."
+        )
+    return warnings
 
 
 def resolve_account_type(name: str) -> AccountType:

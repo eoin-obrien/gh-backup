@@ -14,6 +14,7 @@ from gh_backup.auth import (
     get_token,
     require_auth,
     resolve_account_type,
+    warn_missing_scopes,
 )
 from tests.conftest import GH_AUTH_STATUS_LOGGED_IN, make_completed_process
 
@@ -221,6 +222,35 @@ class TestResolveAccountType:
         with pytest.raises(RuntimeError):
             resolve_account_type("name")
         assert any("/orgs/name" in c for c in calls[0])
+
+
+# ── warn_missing_scopes ───────────────────────────────────────────────────────
+
+
+class TestWarnMissingScopes:
+    def _state(self, scopes: list[str]) -> AuthState:
+        return AuthState(
+            logged_in=True, account="u", hostname="github.com", token="tok", scopes=scopes
+        )
+
+    def test_no_warnings_when_scopes_empty(self):
+        """Empty scopes (unparseable token) → no warnings to avoid false positives."""
+        assert warn_missing_scopes(self._state([])) == []
+
+    def test_no_warnings_when_all_required_scopes_present(self):
+        assert warn_missing_scopes(self._state(["repo", "read:org"])) == []
+
+    def test_warns_when_repo_scope_missing(self):
+        warnings = warn_missing_scopes(self._state(["read:org"]))
+        assert any("repo" in w for w in warnings)
+
+    def test_warns_when_read_org_scope_missing(self):
+        warnings = warn_missing_scopes(self._state(["repo"]))
+        assert any("read:org" in w for w in warnings)
+
+    def test_warns_for_both_missing_scopes(self):
+        warnings = warn_missing_scopes(self._state(["gist"]))
+        assert len(warnings) == 2
 
 
 # ── AuthState dataclass ───────────────────────────────────────────────────────

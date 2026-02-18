@@ -54,9 +54,7 @@ def main(
 
 @app.command("auth")
 def auth_command(
-    verbose: Annotated[
-        bool, typer.Option("--verbose", "-v", help="Enable debug logging.")
-    ] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable debug logging.")] = False,
 ) -> None:
     """Check GitHub CLI authentication status."""
     _setup_logging(verbose)
@@ -93,9 +91,7 @@ def auth_command(
 
 @app.command("export")
 def export_command(
-    org: Annotated[
-        str, typer.Argument(help="GitHub organization or user name to export.")
-    ],
+    org: Annotated[str, typer.Argument(help="GitHub organization or user name to export.")],
     output: Annotated[
         Path,
         typer.Option("--output", "-o", help="Directory to write exports into."),
@@ -112,15 +108,11 @@ def export_command(
     ] = 4,
     no_compress: Annotated[
         bool,
-        typer.Option(
-            "--no-compress", help="Skip compression; keep the raw export directory."
-        ),
+        typer.Option("--no-compress", help="Skip compression; keep the raw export directory."),
     ] = False,
     keep_dir: Annotated[
         bool,
-        typer.Option(
-            "--keep-dir", help="Keep the uncompressed directory after archiving."
-        ),
+        typer.Option("--keep-dir", help="Keep the uncompressed directory after archiving."),
     ] = False,
     fmt: Annotated[
         ArchiveFormat,
@@ -170,9 +162,10 @@ def export_command(
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
 
-    console.print(
-        f"Authenticated as [bold green]{auth_state.account}[/] on {auth_state.hostname}"
-    )
+    for warning in auth.warn_missing_scopes(auth_state):
+        console.print(f"[bold yellow]Warning:[/] {warning}")
+
+    console.print(f"Authenticated as [bold green]{auth_state.account}[/] on {auth_state.hostname}")
 
     console.print(f"Resolving [bold cyan]{org}[/]...")
     try:
