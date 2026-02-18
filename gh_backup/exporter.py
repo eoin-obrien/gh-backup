@@ -11,6 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 
 from rich.console import Console
@@ -38,6 +39,12 @@ from .compress import ArchiveFormat, compress_directory, get_archive_suffix
 from .github import ExportStats, RepoInfo, fetch_issues, fetch_pulls
 
 log = logging.getLogger(__name__)
+
+
+class Visibility(StrEnum):
+    ALL = "all"
+    PUBLIC = "public"
+    PRIVATE = "private"
 
 
 class ExportCancelled(Exception):
@@ -69,6 +76,9 @@ class ExportConfig:
     account_type: AccountType = AccountType.ORG
     keep_dir: bool = False
     git_gc: bool = False
+    skip_forks: bool = False
+    skip_archived: bool = False
+    visibility: Visibility = Visibility.ALL
 
 
 @dataclass
@@ -89,6 +99,19 @@ def create_export_dir(output_dir: Path, org: str) -> Path:
     (export_dir / "issues").mkdir(parents=True, exist_ok=True)
     log.info("Export directory: %s", export_dir)
     return export_dir
+
+
+def _filter_repos(repos: list[RepoInfo], config: ExportConfig) -> list[RepoInfo]:
+    """Apply skip_forks, skip_archived, and visibility filters to a repo list."""
+    if config.skip_forks:
+        repos = [r for r in repos if not r.is_fork]
+    if config.skip_archived:
+        repos = [r for r in repos if not r.is_archived]
+    if config.visibility == Visibility.PUBLIC:
+        repos = [r for r in repos if not r.is_private]
+    elif config.visibility == Visibility.PRIVATE:
+        repos = [r for r in repos if r.is_private]
+    return repos
 
 
 def write_metadata(
@@ -307,6 +330,7 @@ def run_export(config: ExportConfig, console: Console) -> ExportStats:
     # List repos
     console.print(f"[bold]Listing repositories for[/] [cyan]{config.org}[/]...")
     repos = list_repos(config.org, config.only_repos or None)
+    repos = _filter_repos(repos, config)
     if not repos:
         console.print("[yellow]No repositories found.[/]")
         return stats

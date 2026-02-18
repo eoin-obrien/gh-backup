@@ -13,9 +13,11 @@ from rich.console import Console
 
 from gh_backup import __version__
 from gh_backup.exporter import (
+    Visibility,
     _clone_repo,
     _export_repo,
     _export_repo_issues,
+    _filter_repos,
     _gc_repo,
     _redact_token,
     create_export_dir,
@@ -118,6 +120,40 @@ class TestWriteMetadata:
         data = json.loads((export_dir / "metadata.json").read_text())
         assert data["stats"]["total_repos"] == 0
         assert data["repos"] == []
+
+
+# ── _filter_repos ────────────────────────────────────────────────────────────
+
+
+class TestFilterRepos:
+    def test_skip_forks_removes_forked_repos(self, make_repo, export_config):
+        repos = [make_repo("a", is_fork=False), make_repo("b", is_fork=True)]
+        export_config.skip_forks = True
+        assert [r.name for r in _filter_repos(repos, export_config)] == ["a"]
+
+    def test_skip_archived_removes_archived_repos(self, make_repo, export_config):
+        repos = [make_repo("a", is_archived=False), make_repo("b", is_archived=True)]
+        export_config.skip_archived = True
+        assert [r.name for r in _filter_repos(repos, export_config)] == ["a"]
+
+    def test_visibility_public_keeps_only_public(self, make_repo, export_config):
+        repos = [make_repo("pub", is_private=False), make_repo("priv", is_private=True)]
+        export_config.visibility = Visibility.PUBLIC
+        assert [r.name for r in _filter_repos(repos, export_config)] == ["pub"]
+
+    def test_visibility_private_keeps_only_private(self, make_repo, export_config):
+        repos = [make_repo("pub", is_private=False), make_repo("priv", is_private=True)]
+        export_config.visibility = Visibility.PRIVATE
+        assert [r.name for r in _filter_repos(repos, export_config)] == ["priv"]
+
+    def test_visibility_all_keeps_everything(self, make_repo, export_config):
+        repos = [make_repo("pub", is_private=False), make_repo("priv", is_private=True)]
+        export_config.visibility = Visibility.ALL
+        assert len(_filter_repos(repos, export_config)) == 2
+
+    def test_no_filters_returns_all_repos(self, make_repo, export_config):
+        repos = [make_repo("a", is_fork=True), make_repo("b", is_archived=True)]
+        assert _filter_repos(repos, export_config) == repos
 
 
 # ── _clone_repo ───────────────────────────────────────────────────────────────

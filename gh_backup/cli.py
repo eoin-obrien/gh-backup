@@ -14,7 +14,7 @@ from rich.table import Table
 
 from . import __version__
 from .compress import ArchiveFormat
-from .exporter import ExportConfig, run_export
+from .exporter import ExportConfig, Visibility, run_export
 
 APP_NAME = "gh-backup"
 
@@ -129,6 +129,18 @@ def export_command(
         bool,
         typer.Option("--skip-issues", help="Skip issues and pull request export."),
     ] = False,
+    skip_forks: Annotated[
+        bool,
+        typer.Option("--skip-forks", help="Exclude forked repositories."),
+    ] = False,
+    skip_archived: Annotated[
+        bool,
+        typer.Option("--skip-archived", help="Exclude archived repositories."),
+    ] = False,
+    visibility: Annotated[
+        Visibility,
+        typer.Option("--visibility", help="Only export repos with this visibility."),
+    ] = Visibility.ALL,
     repos: Annotated[
         list[str] | None,
         typer.Option("--repos", "-r", help="Only export this repo (repeatable)."),
@@ -181,6 +193,9 @@ def export_command(
         compress=not no_compress,
         fmt=fmt,
         skip_issues=skip_issues,
+        skip_forks=skip_forks,
+        skip_archived=skip_archived,
+        visibility=visibility,
         only_repos=repos or [],
         token=token,
         account_type=account_type,

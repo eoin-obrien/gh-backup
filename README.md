@@ -65,6 +65,9 @@ Account type (org or user) is detected automatically.
 | `--no-compress` | | Keep raw export directory, skip archiving |
 | `--keep-dir` | | Keep uncompressed directory after archiving |
 | `--gc` | | Run `git gc --aggressive` on each clone to shrink pack files |
+| `--skip-forks` | | Exclude forked repositories |
+| `--skip-archived` | | Exclude archived repositories |
+| `--visibility` | | Only export repos with this visibility: `all` (default), `public`, or `private` |
 | `--skip-issues` | | Skip issues and pull request export |
 | `--verbose` | `-v` | Enable debug logging |
 
