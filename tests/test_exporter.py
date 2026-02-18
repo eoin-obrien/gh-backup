@@ -180,6 +180,20 @@ class TestCloneRepo:
         assert "mytoken" not in (exc_info.value.stderr or "")
         assert "***" in (exc_info.value.stderr or "")
 
+    def test_partial_clone_dir_removed_on_failure(self, mocker, repo, tmp_path):
+        """Partial clone directory is cleaned up after all retries are exhausted."""
+        dest = tmp_path / "repo.git"
+        dest.mkdir()  # simulate a partial clone directory
+
+        mocker.patch(
+            "gh_backup.exporter.subprocess.run",
+            side_effect=subprocess.CalledProcessError(128, "git"),
+        )
+        mocker.patch("gh_backup.exporter._sleep_or_cancel")
+        with pytest.raises(subprocess.CalledProcessError):
+            _clone_repo(repo, dest, "mytoken")
+        assert not dest.exists()
+
 
 # ── _redact_token ─────────────────────────────────────────────────────────────
 

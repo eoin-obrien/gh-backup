@@ -166,6 +166,11 @@ def _clone_repo(
                     env=env,
                 )
     except subprocess.CalledProcessError as e:
+        # Remove any partial clone directory left behind.
+        if dest.exists():
+            import shutil
+
+            shutil.rmtree(dest, ignore_errors=True)
         # Redact the token from any error output before re-raising.
         redacted = subprocess.CalledProcessError(e.returncode, e.cmd)
         redacted.stdout = _redact_token(e.stdout or "", token)
