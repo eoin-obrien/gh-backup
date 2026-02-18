@@ -80,6 +80,7 @@ class ExportConfig:
     skip_archived: bool = False
     visibility: Visibility = Visibility.ALL
     dry_run: bool = False
+    shallow: bool = False
 
 
 @dataclass
@@ -165,12 +166,20 @@ def _clone_repo(
     dest: Path,
     token: str,
     stop_event: threading.Event | None = None,
+    shallow: bool = False,
 ) -> None:
-    """Mirror-clone a repo with full history into `dest`."""
+    """Mirror-clone a repo with full history into `dest`.
+
+    Pass shallow=True to add --depth 1 (faster, smaller, no full history).
+    """
     if stop_event is None:
         stop_event = threading.Event()
     clone_url = repo.url.replace("https://", f"https://oauth2:{token}@")
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    cmd = ["git", "clone", "--mirror"]
+    if shallow:
+        cmd += ["--depth", "1"]
+    cmd += [clone_url, str(dest)]
     try:
         for attempt in Retrying(
             stop=stop_after_attempt(3),
@@ -183,12 +192,7 @@ def _clone_repo(
             with attempt:
                 if stop_event.is_set():
                     raise ExportCancelled()
-                subprocess.run(
-                    ["git", "clone", "--mirror", clone_url, str(dest)],
-                    check=True,
-                    capture_output=True,
-                    env=env,
-                )
+                subprocess.run(cmd, check=True, capture_output=True, env=env)
     except subprocess.CalledProcessError as e:
         # Remove any partial clone directory left behind.
         if dest.exists():
@@ -270,7 +274,7 @@ def _export_repo(
     try:
         # Clone
         progress.update(task, description=f"[cyan]clone:[/] {repo.name}")
-        _clone_repo(repo, clone_path, config.token, stop_event)
+        _clone_repo(repo, clone_path, config.token, stop_event, shallow=config.shallow)
         progress.advance(task)
 
         # GC (optional)

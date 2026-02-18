@@ -125,6 +125,10 @@ def export_command(
             help="Run 'git gc --aggressive' on each clone before archiving to shrink pack files.",
         ),
     ] = False,
+    shallow: Annotated[
+        bool,
+        typer.Option("--shallow", help="Shallow clone (--depth 1); faster but no full history."),
+    ] = False,
     skip_issues: Annotated[
         bool,
         typer.Option("--skip-issues", help="Skip issues and pull request export."),
@@ -206,7 +210,14 @@ def export_command(
         keep_dir=keep_dir,
         git_gc=git_gc,
         dry_run=dry_run,
+        shallow=shallow,
     )
+
+    if shallow and git_gc:
+        console.print(
+            "[bold yellow]Warning:[/] --shallow and --gc are both set. "
+            "git gc --aggressive has no effect on shallow clones."
+        )
 
     try:
         stats = run_export(config, console)

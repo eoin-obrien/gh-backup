@@ -64,6 +64,7 @@ Account type (org or user) is detected automatically.
 | `--format` | | Archive format: `zst` (default), `gz`, or `xz` |
 | `--no-compress` | | Keep raw export directory, skip archiving |
 | `--keep-dir` | | Keep uncompressed directory after archiving |
+| `--shallow` | | Shallow clone (`--depth 1`); faster but no full history |
 | `--gc` | | Run `git gc --aggressive` on each clone to shrink pack files |
 | `--dry-run` | | List repos that would be exported without writing anything |
 | `--skip-forks` | | Exclude forked repositories |
