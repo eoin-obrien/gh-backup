@@ -118,15 +118,11 @@ class TestAuthCommand:
 
 
 class TestExportCommand:
-    def test_happy_path_exits_zero(
-        self, mocker, mock_auth_ok, mock_run_export_ok, tmp_path
-    ):
+    def test_happy_path_exits_zero(self, mocker, mock_auth_ok, mock_run_export_ok, tmp_path):
         result = runner.invoke(app, ["export", "myorg", "--output", str(tmp_path)])
         assert result.exit_code == 0
 
-    def test_calls_run_export_once(
-        self, mocker, mock_auth_ok, mock_run_export_ok, tmp_path
-    ):
+    def test_calls_run_export_once(self, mocker, mock_auth_ok, mock_run_export_ok, tmp_path):
         runner.invoke(app, ["export", "myorg", "--output", str(tmp_path)])
         mock_run_export_ok.assert_called_once()
 
@@ -180,9 +176,7 @@ class TestExportCommand:
             return ExportStats(repos_total=0)
 
         mocker.patch("gh_backup.cli.run_export", side_effect=capture)
-        runner.invoke(
-            app, ["export", "myorg", "--output", str(tmp_path), "--no-compress"]
-        )
+        runner.invoke(app, ["export", "myorg", "--output", str(tmp_path), "--no-compress"])
         assert captured["config"].compress is False
 
     def test_default_compress_is_true(self, mocker, mock_auth_ok, tmp_path):
@@ -204,9 +198,7 @@ class TestExportCommand:
             return ExportStats(repos_total=0)
 
         mocker.patch("gh_backup.cli.run_export", side_effect=capture)
-        runner.invoke(
-            app, ["export", "myorg", "--output", str(tmp_path), "--workers", "8"]
-        )
+        runner.invoke(app, ["export", "myorg", "--output", str(tmp_path), "--workers", "8"])
         assert captured["config"].workers == 8
 
     def test_skip_issues_flag_sets_config(self, mocker, mock_auth_ok, tmp_path):
@@ -217,9 +209,7 @@ class TestExportCommand:
             return ExportStats(repos_total=0)
 
         mocker.patch("gh_backup.cli.run_export", side_effect=capture)
-        runner.invoke(
-            app, ["export", "myorg", "--output", str(tmp_path), "--skip-issues"]
-        )
+        runner.invoke(app, ["export", "myorg", "--output", str(tmp_path), "--skip-issues"])
         assert captured["config"].skip_issues is True
 
     def test_repos_filter_sets_only_repos(self, mocker, mock_auth_ok, tmp_path):
@@ -249,9 +239,7 @@ class TestExportCommand:
         "fmt_str,expected_value",
         [("gz", "gz"), ("xz", "xz"), ("zst", "zst")],
     )
-    def test_format_option_sets_fmt(
-        self, mocker, mock_auth_ok, tmp_path, fmt_str, expected_value
-    ):
+    def test_format_option_sets_fmt(self, mocker, mock_auth_ok, tmp_path, fmt_str, expected_value):
         captured = {}
 
         def capture(config, console):
@@ -265,12 +253,8 @@ class TestExportCommand:
         )
         assert str(captured["config"].fmt) == expected_value
 
-    def test_resolved_account_type_stored_in_config(
-        self, mocker, mock_auth_ok, tmp_path
-    ):
-        mocker.patch(
-            "gh_backup.auth.resolve_account_type", return_value=AccountType.USER
-        )
+    def test_resolved_account_type_stored_in_config(self, mocker, mock_auth_ok, tmp_path):
+        mocker.patch("gh_backup.auth.resolve_account_type", return_value=AccountType.USER)
         captured = {}
 
         def capture(config, console):
@@ -304,9 +288,7 @@ def _buf_console() -> tuple[StringIO, Console]:
 class TestPrintSummary:
     def test_shows_repos_cloned_count(self):
         buf, console = _buf_console()
-        _print_summary(
-            ExportStats(repos_total=5, repos_cloned=5, duration_seconds=10.0), console
-        )
+        _print_summary(ExportStats(repos_total=5, repos_cloned=5, duration_seconds=10.0), console)
         assert "5" in buf.getvalue()
 
     def test_shows_failed_repo_names_when_present(self):
@@ -343,9 +325,7 @@ class TestPrintSummary:
 
     def test_success_message_shown_when_all_cloned(self):
         buf, console = _buf_console()
-        _print_summary(
-            ExportStats(repos_cloned=3, repos_failed=0, duration_seconds=2.0), console
-        )
+        _print_summary(ExportStats(repos_cloned=3, repos_failed=0, duration_seconds=2.0), console)
         assert "successfully" in buf.getvalue().lower()
 
     def test_no_success_message_when_repos_failed(self):
