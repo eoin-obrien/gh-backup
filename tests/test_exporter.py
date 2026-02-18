@@ -17,6 +17,7 @@ from gh_backup.exporter import (
     _export_repo,
     _export_repo_issues,
     _gc_repo,
+    _redact_token,
     create_export_dir,
     run_export,
     write_metadata,
@@ -74,9 +75,7 @@ class TestWriteMetadata:
         data = json.loads((export_dir / "metadata.json").read_text())
         assert data["stats"]["total_repos"] == 2
 
-    def test_correct_private_and_public_counts(
-        self, tmp_path, two_repos, export_config
-    ):
+    def test_correct_private_and_public_counts(self, tmp_path, two_repos, export_config):
         export_dir = self._make_export_dir(tmp_path)
         write_metadata(export_dir, "myorg", two_repos, export_config)
         data = json.loads((export_dir / "metadata.json").read_text())
@@ -169,6 +168,31 @@ class TestCloneRepo:
         mocker.patch("gh_backup.exporter._sleep_or_cancel")
         _clone_repo(repo, tmp_path / "repo.git", "mytoken")
         assert call_count["n"] == 2
+
+    def test_token_redacted_in_error_on_final_failure(self, mocker, repo, tmp_path):
+        """Token must not appear in the exception raised after all retries are exhausted."""
+        err = subprocess.CalledProcessError(128, "git")
+        err.stderr = "fatal: unable to access 'https://oauth2:mytoken@github.com/org/repo.git/'"
+        mocker.patch("gh_backup.exporter.subprocess.run", side_effect=err)
+        mocker.patch("gh_backup.exporter._sleep_or_cancel")
+        with pytest.raises(subprocess.CalledProcessError) as exc_info:
+            _clone_repo(repo, tmp_path / "repo.git", "mytoken")
+        assert "mytoken" not in (exc_info.value.stderr or "")
+        assert "***" in (exc_info.value.stderr or "")
+
+
+# ── _redact_token ─────────────────────────────────────────────────────────────
+
+
+class TestRedactToken:
+    def test_replaces_token_with_asterisks(self):
+        assert _redact_token("url with secret123 in it", "secret123") == "url with *** in it"
+
+    def test_no_op_when_token_empty(self):
+        assert _redact_token("some text", "") == "some text"
+
+    def test_no_op_when_token_not_present(self):
+        assert _redact_token("no secret here", "othersecret") == "no secret here"
 
 
 # ── _gc_repo ──────────────────────────────────────────────────────────────────
@@ -265,16 +289,12 @@ class TestExportRepo:
         issues_dir = tmp_path / "issues"
         issues_dir.mkdir()
 
-        result = _export_repo(
-            repo, export_config, repos_dir, issues_dir, _make_progress(), 0
-        )
+        result = _export_repo(repo, export_config, repos_dir, issues_dir, _make_progress(), 0)
         assert result.success is True
         assert result.issues_count == 5
         assert result.pulls_count == 3
 
-    def test_clone_failure_returns_failure_result(
-        self, mocker, repo, export_config, tmp_path
-    ):
+    def test_clone_failure_returns_failure_result(self, mocker, repo, export_config, tmp_path):
         mocker.patch(
             "gh_backup.exporter._clone_repo",
             side_effect=subprocess.CalledProcessError(128, "git"),
@@ -284,15 +304,11 @@ class TestExportRepo:
         issues_dir = tmp_path / "issues"
         issues_dir.mkdir()
 
-        result = _export_repo(
-            repo, export_config, repos_dir, issues_dir, _make_progress(), 0
-        )
+        result = _export_repo(repo, export_config, repos_dir, issues_dir, _make_progress(), 0)
         assert result.success is False
         assert result.error is not None
 
-    def test_skip_issues_does_not_call_export_issues(
-        self, mocker, repo, export_config, tmp_path
-    ):
+    def test_skip_issues_does_not_call_export_issues(self, mocker, repo, export_config, tmp_path):
         export_config.skip_issues = True
         mocker.patch("gh_backup.exporter._clone_repo")
         mock_issues = mocker.patch("gh_backup.exporter._export_repo_issues")
@@ -304,9 +320,7 @@ class TestExportRepo:
         _export_repo(repo, export_config, repos_dir, issues_dir, _make_progress(), 0)
         mock_issues.assert_not_called()
 
-    def test_issues_failure_does_not_fail_repo(
-        self, mocker, repo, export_config, tmp_path
-    ):
+    def test_issues_failure_does_not_fail_repo(self, mocker, repo, export_config, tmp_path):
         """Issues export failure is logged as warning; repo still succeeds."""
         mocker.patch("gh_backup.exporter._clone_repo")
         mocker.patch(
@@ -318,9 +332,7 @@ class TestExportRepo:
         issues_dir = tmp_path / "issues"
         issues_dir.mkdir()
 
-        result = _export_repo(
-            repo, export_config, repos_dir, issues_dir, _make_progress(), 0
-        )
+        result = _export_repo(repo, export_config, repos_dir, issues_dir, _make_progress(), 0)
         assert result.success is True
         assert result.issues_count == 0
 
@@ -334,15 +346,11 @@ class TestExportRepo:
         issues_dir = tmp_path / "issues"
         issues_dir.mkdir()
 
-        result = _export_repo(
-            repo, export_config, repos_dir, issues_dir, _make_progress(), 0
-        )
+        result = _export_repo(repo, export_config, repos_dir, issues_dir, _make_progress(), 0)
         assert result.success is True
         mock_gc.assert_called_once_with(repos_dir / f"{repo.name}.git")
 
-    def test_gc_not_called_when_git_gc_false(
-        self, mocker, repo, export_config, tmp_path
-    ):
+    def test_gc_not_called_when_git_gc_false(self, mocker, repo, export_config, tmp_path):
         export_config.git_gc = False
         mocker.patch("gh_backup.exporter._clone_repo")
         mocker.patch("gh_backup.exporter._export_repo_issues", return_value=(0, 0))
@@ -368,9 +376,7 @@ class TestExportRepo:
         issues_dir = tmp_path / "issues"
         issues_dir.mkdir()
 
-        result = _export_repo(
-            repo, export_config, repos_dir, issues_dir, _make_progress(), 0
-        )
+        result = _export_repo(repo, export_config, repos_dir, issues_dir, _make_progress(), 0)
         assert result.success is True
 
     def test_clone_path_set_on_success(self, mocker, repo, export_config, tmp_path):
@@ -381,9 +387,7 @@ class TestExportRepo:
         issues_dir = tmp_path / "issues"
         issues_dir.mkdir()
 
-        result = _export_repo(
-            repo, export_config, repos_dir, issues_dir, _make_progress(), 0
-        )
+        result = _export_repo(repo, export_config, repos_dir, issues_dir, _make_progress(), 0)
         assert result.clone_path == repos_dir / f"{repo.name}.git"
 
 
@@ -410,9 +414,7 @@ class TestRunExport:
         stats = run_export(export_config, _console())
         assert stats.repos_total == 0
 
-    def test_counts_failed_repos_in_stats(
-        self, mocker, export_config, two_repos, tmp_path
-    ):
+    def test_counts_failed_repos_in_stats(self, mocker, export_config, two_repos, tmp_path):
         export_config.output_dir = tmp_path / "output"
         mocker.patch("gh_backup.github.list_repos", return_value=two_repos)
         call_count = {"n": 0}
@@ -428,9 +430,7 @@ class TestRunExport:
         stats = run_export(export_config, _console())
         assert stats.repos_failed >= 1
 
-    def test_calls_compress_when_compress_true(
-        self, mocker, export_config, two_repos, tmp_path
-    ):
+    def test_calls_compress_when_compress_true(self, mocker, export_config, two_repos, tmp_path):
         export_config.output_dir = tmp_path / "output"
         export_config.compress = True
         mocker.patch("gh_backup.github.list_repos", return_value=two_repos)
@@ -484,9 +484,7 @@ class TestRunExport:
         run_export(export_config, _console())
         mock_rmtree.assert_called_once()
 
-    def test_keeps_dir_when_keep_dir_true(
-        self, mocker, export_config, two_repos, tmp_path
-    ):
+    def test_keeps_dir_when_keep_dir_true(self, mocker, export_config, two_repos, tmp_path):
         export_config.output_dir = tmp_path / "output"
         export_config.compress = True
         export_config.keep_dir = True
@@ -504,9 +502,7 @@ class TestRunExport:
         run_export(export_config, _console())
         mock_rmtree.assert_not_called()
 
-    def test_duration_seconds_is_non_negative(
-        self, mocker, export_config, two_repos, tmp_path
-    ):
+    def test_duration_seconds_is_non_negative(self, mocker, export_config, two_repos, tmp_path):
         export_config.output_dir = tmp_path / "output"
         mocker.patch("gh_backup.github.list_repos", return_value=two_repos)
         mocker.patch("gh_backup.exporter._clone_repo")

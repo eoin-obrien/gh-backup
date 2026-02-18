@@ -131,6 +131,11 @@ def write_metadata(
     (export_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
 
+def _redact_token(text: str, token: str) -> str:
+    """Replace occurrences of `token` in `text` with ***."""
+    return text.replace(token, "***") if token else text
+
+
 def _clone_repo(
     repo: RepoInfo,
     dest: Path,
@@ -142,23 +147,30 @@ def _clone_repo(
         stop_event = threading.Event()
     clone_url = repo.url.replace("https://", f"https://oauth2:{token}@")
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-    for attempt in Retrying(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=30),
-        retry=retry_if_exception_type(subprocess.CalledProcessError),
-        reraise=True,
-        before_sleep=lambda rs: _log_before_sleep(stop_event, rs),
-        sleep=lambda s: _sleep_or_cancel(stop_event, s),
-    ):
-        with attempt:
-            if stop_event.is_set():
-                raise ExportCancelled()
-            subprocess.run(
-                ["git", "clone", "--mirror", clone_url, str(dest)],
-                check=True,
-                capture_output=True,
-                env=env,
-            )
+    try:
+        for attempt in Retrying(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=2, max=30),
+            retry=retry_if_exception_type(subprocess.CalledProcessError),
+            reraise=True,
+            before_sleep=lambda rs: _log_before_sleep(stop_event, rs),
+            sleep=lambda s: _sleep_or_cancel(stop_event, s),
+        ):
+            with attempt:
+                if stop_event.is_set():
+                    raise ExportCancelled()
+                subprocess.run(
+                    ["git", "clone", "--mirror", clone_url, str(dest)],
+                    check=True,
+                    capture_output=True,
+                    env=env,
+                )
+    except subprocess.CalledProcessError as e:
+        # Redact the token from any error output before re-raising.
+        redacted = subprocess.CalledProcessError(e.returncode, e.cmd)
+        redacted.stdout = _redact_token(e.stdout or "", token)
+        redacted.stderr = _redact_token(e.stderr or "", token)
+        raise redacted from None
 
 
 def _gc_repo(clone_path: Path) -> None:
