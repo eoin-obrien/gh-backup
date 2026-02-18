@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags: ['[0-9]*']  # matches 0.1.0, 1.2.3, etc. (commitizen tag_format = "$version")
+  workflow_dispatch: {}  # manual: Actions → Release → Run workflow → select tag
+
+jobs:
+  release:
+    name: Build & Publish
+    runs-on: ubuntu-latest
+    environment: release  # must match the environment name in the PyPI trusted publisher config
+    permissions:
+      contents: write   # create GitHub release
+      id-token: write   # OIDC token for PyPI trusted publishing
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Build package
+        run: uv build
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+
+      - name: Publish to PyPI
+        run: uv publish
+
+      - name: Prune uv cache
+        run: uv cache prune --ci
