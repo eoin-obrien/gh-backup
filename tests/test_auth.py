@@ -17,7 +17,6 @@ from gh_backup.auth import (
 )
 from tests.conftest import GH_AUTH_STATUS_LOGGED_IN, make_completed_process
 
-
 # ── check_auth ────────────────────────────────────────────────────────────────
 
 
@@ -103,10 +102,7 @@ class TestCheckAuth:
 
     def test_scopes_parsed_and_stripped(self, mocker):
         """Scopes are split on commas and surrounding quotes removed."""
-        stderr = (
-            "  Logged in to github.com account u (k)\n"
-            "  Token scopes: 'repo', 'read:org'\n"
-        )
+        stderr = "  Logged in to github.com account u (k)\n  Token scopes: 'repo', 'read:org'\n"
         mocker.patch(
             "gh_backup.auth.subprocess.run",
             side_effect=[
@@ -122,9 +118,7 @@ class TestCheckAuth:
         mocker.patch(
             "gh_backup.auth.subprocess.run",
             side_effect=[
-                make_completed_process(
-                    stdout=GH_AUTH_STATUS_LOGGED_IN, stderr="", returncode=0
-                ),
+                make_completed_process(stdout=GH_AUTH_STATUS_LOGGED_IN, stderr="", returncode=0),
                 make_completed_process(stdout="tok\n", returncode=0),
             ],
         )
@@ -245,7 +239,5 @@ class TestAuthState:
 
     def test_empty_scopes_default(self):
         """Scopes default to empty list when not provided."""
-        state = AuthState(
-            logged_in=False, account=None, hostname="github.com", token=None
-        )
+        state = AuthState(logged_in=False, account=None, hostname="github.com", token=None)
         assert state.scopes == []

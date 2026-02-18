@@ -12,7 +12,6 @@ from gh_backup.compress import (
     get_archive_suffix,
 )
 
-
 # ── get_archive_suffix ────────────────────────────────────────────────────────
 
 
@@ -67,9 +66,7 @@ class TestCompressDirectory:
             compress_directory(source_dir=source_dir, output_path=output)
         assert not output.exists()
 
-    def test_progress_callback_invoked_with_increasing_values(
-        self, source_dir, tmp_path
-    ):
+    def test_progress_callback_invoked_with_increasing_values(self, source_dir, tmp_path):
         """Progress callback is called at least once with non-decreasing byte counts."""
         calls = []
         compress_directory(
@@ -97,9 +94,7 @@ class TestCompressZst:
         import zstandard
 
         output = tmp_path / "out.tar.zst"
-        compress_directory(
-            source_dir=source_dir, output_path=output, fmt=ArchiveFormat.ZST
-        )
+        compress_directory(source_dir=source_dir, output_path=output, fmt=ArchiveFormat.ZST)
 
         dctx = zstandard.ZstdDecompressor()
         with open(output, "rb") as f:
@@ -112,9 +107,7 @@ class TestCompressZst:
         assert any("file2.txt" in n for n in names)
 
     @pytest.mark.parametrize("level", [1, 3, 9])
-    def test_various_compression_levels_produce_valid_archive(
-        self, source_dir, tmp_path, level
-    ):
+    def test_various_compression_levels_produce_valid_archive(self, source_dir, tmp_path, level):
         output = tmp_path / f"out-level{level}.tar.zst"
         compress_directory(
             source_dir=source_dir,
@@ -132,9 +125,7 @@ class TestCompressZst:
 class TestCompressGz:
     def test_archive_contains_source_files(self, source_dir, tmp_path):
         output = tmp_path / "out.tar.gz"
-        compress_directory(
-            source_dir=source_dir, output_path=output, fmt=ArchiveFormat.GZ
-        )
+        compress_directory(source_dir=source_dir, output_path=output, fmt=ArchiveFormat.GZ)
         with tarfile.open(str(output), "r:gz") as tar:
             names = tar.getnames()
         assert any("file1.txt" in n for n in names)
@@ -142,9 +133,7 @@ class TestCompressGz:
 
     def test_produces_non_empty_archive(self, source_dir, tmp_path):
         output = tmp_path / "out.tar.gz"
-        compress_directory(
-            source_dir=source_dir, output_path=output, fmt=ArchiveFormat.GZ
-        )
+        compress_directory(source_dir=source_dir, output_path=output, fmt=ArchiveFormat.GZ)
         assert output.stat().st_size > 0
 
 
@@ -154,18 +143,14 @@ class TestCompressGz:
 class TestCompressXz:
     def test_archive_contains_source_files(self, source_dir, tmp_path):
         output = tmp_path / "out.tar.xz"
-        compress_directory(
-            source_dir=source_dir, output_path=output, fmt=ArchiveFormat.XZ
-        )
+        compress_directory(source_dir=source_dir, output_path=output, fmt=ArchiveFormat.XZ)
         with tarfile.open(str(output), "r:xz") as tar:
             names = tar.getnames()
         assert any("file1.txt" in n for n in names)
 
     def test_produces_non_empty_archive(self, source_dir, tmp_path):
         output = tmp_path / "out.tar.xz"
-        compress_directory(
-            source_dir=source_dir, output_path=output, fmt=ArchiveFormat.XZ
-        )
+        compress_directory(source_dir=source_dir, output_path=output, fmt=ArchiveFormat.XZ)
         assert output.stat().st_size > 0
 
 
@@ -181,9 +166,7 @@ class TestCompressEdgeCases:
         compress_directory(source_dir=src, output_path=output)
         assert output.exists()
 
-    @pytest.mark.parametrize(
-        "fmt", [ArchiveFormat.ZST, ArchiveFormat.GZ, ArchiveFormat.XZ]
-    )
+    @pytest.mark.parametrize("fmt", [ArchiveFormat.ZST, ArchiveFormat.GZ, ArchiveFormat.XZ])
     def test_all_formats_produce_non_empty_archive(self, source_dir, tmp_path, fmt):
         suffix = get_archive_suffix(fmt)
         output = tmp_path / f"out{suffix}"

@@ -14,7 +14,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from rich.console import Console
-from rich.table import Column
 from rich.progress import (
     BarColumn,
     Progress,
@@ -24,6 +23,7 @@ from rich.progress import (
     TextColumn,
     TimeRemainingColumn,
 )
+from rich.table import Column
 from tenacity import (
     Retrying,
     before_sleep_log,
@@ -270,9 +270,7 @@ def _export_repo(
         )
 
     except ExportCancelled:
-        progress.update(
-            task, description=f"[yellow]cancelled:[/] {repo.name}", visible=False
-        )
+        progress.update(task, description=f"[yellow]cancelled:[/] {repo.name}", visible=False)
         progress.advance(overall_task)
         return RepoResult(repo=repo, success=False, error="Cancelled")
     except Exception as e:
@@ -318,21 +316,15 @@ def run_export(config: ExportConfig, console: Console) -> ExportStats:
 
     progress_columns = [
         SpinnerColumn(),
-        TextColumn(
-            "[progress.description]{task.description}", table_column=Column(ratio=1)
-        ),
+        TextColumn("[progress.description]{task.description}", table_column=Column(ratio=1)),
         BarColumn(bar_width=None, table_column=Column(ratio=1)),
         TaskProgressColumn(),
         TextColumn("•"),
         TimeRemainingColumn(),
     ]
 
-    with Progress(
-        *progress_columns, console=console, transient=False, expand=True
-    ) as progress:
-        overall_task = progress.add_task(
-            f"[bold]Exporting {config.org}[/]", total=len(repos)
-        )
+    with Progress(*progress_columns, console=console, transient=False, expand=True) as progress:
+        overall_task = progress.add_task(f"[bold]Exporting {config.org}[/]", total=len(repos))
 
         with ThreadPoolExecutor(max_workers=config.workers) as executor:
             futures = {
@@ -354,9 +346,7 @@ def run_export(config: ExportConfig, console: Console) -> ExportStats:
                     results.append(result)
             except KeyboardInterrupt:
                 stop_event.set()
-                console.print(
-                    "\n[yellow]Interrupted — cancelling remaining downloads...[/]"
-                )
+                console.print("\n[yellow]Interrupted — cancelling remaining downloads...[/]")
                 executor.shutdown(wait=False, cancel_futures=True)
                 raise
 
@@ -376,9 +366,7 @@ def run_export(config: ExportConfig, console: Console) -> ExportStats:
         archive_path = config.output_dir / f"{export_dir.name}{suffix}"
 
         console.print(f"\nCompressing to [cyan]{archive_path.name}[/]...")
-        source_size = sum(
-            f.stat().st_size for f in export_dir.rglob("*") if f.is_file()
-        )
+        source_size = sum(f.stat().st_size for f in export_dir.rglob("*") if f.is_file())
 
         try:
             with Progress(
