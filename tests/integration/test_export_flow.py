@@ -74,9 +74,7 @@ class TestFullExportFlow:
         assert stats.repos_cloned == 2
         assert stats.repos_failed == 0
 
-    def test_creates_metadata_json_with_correct_org(
-        self, full_mock_subprocess, tmp_path
-    ):
+    def test_creates_metadata_json_with_correct_org(self, full_mock_subprocess, tmp_path):
         run_export(_make_config(tmp_path), _console())
         output_dirs = list((tmp_path / "output").iterdir())
         assert len(output_dirs) == 1
@@ -106,3 +104,22 @@ class TestFullExportFlow:
         assert (export_dir / "repos").is_dir()
         assert (export_dir / "issues").is_dir()
         assert (export_dir / "metadata.json").exists()
+
+    @pytest.mark.parametrize("fmt", ["zst", "gz", "xz"])
+    def test_compress_produces_valid_archive(self, full_mock_subprocess, tmp_path, fmt):
+        """Full pipeline with compression enabled produces a readable archive."""
+        from gh_backup.compress import ArchiveFormat, verify_archive
+
+        archive_fmt = ArchiveFormat(fmt)
+        stats = run_export(
+            _make_config(tmp_path, compress=True, fmt=archive_fmt),
+            _console(),
+        )
+        assert stats.bytes_compressed > 0
+
+        output_dir = tmp_path / "output"
+        archives = list(output_dir.glob(f"*.tar.{fmt}"))
+        assert len(archives) == 1, f"Expected one .tar.{fmt} archive, found: {archives}"
+
+        member_count = verify_archive(archives[0])
+        assert member_count > 0
